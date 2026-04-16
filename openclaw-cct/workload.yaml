@@ -1,0 +1,36 @@
+apiVersion: openchoreo.dev/v1alpha1
+kind: Workload
+metadata:
+  name: openclaw-agent
+  namespace: default
+spec:
+  owner:
+    projectName: openclaw-agents
+    componentName: openclaw-agent
+  container:
+    image: ghcr.io/openclaw/openclaw:slim
+    command:
+      - node
+      - /app/dist/index.js
+      - gateway
+      - --bind=lan
+      - --port
+      - "18789"
+      - --allow-unconfigured
+      - --verbose
+    env:
+      - key: OPENAI_API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: openai-api-key
+            key: value
+  endpoints:
+    gateway:
+      displayName: OpenClaw Gateway
+      type: HTTP
+      port: 18789
+      targetPort: 18789
+      basePath: /
+      visibility:
+        - project
+        - external

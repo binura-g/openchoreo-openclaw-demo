@@ -1,0 +1,24 @@
+apiVersion: openchoreo.dev/v1alpha1
+kind: Component
+metadata:
+  name: openclaw-sandbox-agent
+  namespace: default
+  annotations:
+    openchoreo.dev/display-name: OpenClaw Sandbox Agent
+    openchoreo.dev/description: OpenClaw gateway agent backed by the Kubernetes SIG Agent Sandbox controller.
+spec:
+  owner:
+    projectName: openclaw-agents
+  componentType:
+    kind: ClusterComponentType
+    name: proxy/openclaw-agent-sandbox
+  autoDeploy: true
+  parameters:
+    gatewayTokenSecret: openclaw-gateway-token
+    storageSize: 1Gi
+    gateway:
+      bind: lan
+      port: 18789
+    agent:
+      name: OpenClaw Sandbox Agent
+      instructions: You are a helpful OpenClaw agent running in an Agent Sandbox on OpenChoreo.

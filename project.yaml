@@ -1,0 +1,11 @@
+apiVersion: openchoreo.dev/v1alpha1
+kind: Project
+metadata:
+  name: openclaw-agents
+  namespace: default
+  annotations:
+    openchoreo.dev/description: OpenClaw agent deployments on OpenChoreo.
+spec:
+  deploymentPipelineRef:
+    kind: DeploymentPipeline
+    name: default

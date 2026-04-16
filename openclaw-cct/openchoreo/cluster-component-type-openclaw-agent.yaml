@@ -1,0 +1,440 @@
+apiVersion: openchoreo.dev/v1alpha1
+kind: ClusterComponentType
+metadata:
+  name: openclaw-agent
+  annotations:
+    openchoreo.dev/display-name: OpenClaw Agent
+    openchoreo.dev/description: Stateful OpenClaw agent gateway with PVC-backed home directory, OpenChoreo-managed secrets, and Gateway API endpoints.
+spec:
+  workloadType: deployment
+  allowedTraits:
+    - kind: ClusterTrait
+      name: observability-alert-rule
+  environmentConfigs:
+    openAPIV3Schema:
+      type: object
+      properties:
+        replicas:
+          type: integer
+          minimum: 0
+          maximum: 1
+          default: 1
+        imagePullPolicy:
+          type: string
+          enum:
+            - Always
+            - IfNotPresent
+            - Never
+          default: IfNotPresent
+        resources:
+          type: object
+          default: {}
+          properties:
+            requests:
+              type: object
+              default: {}
+              properties:
+                cpu:
+                  type: string
+                  default: 250m
+                memory:
+                  type: string
+                  default: 512Mi
+            limits:
+              type: object
+              default: {}
+              properties:
+                cpu:
+                  type: string
+                  default: "1000m"
+                memory:
+                  type: string
+                  default: 2Gi
+  parameters:
+    openAPIV3Schema:
+      type: object
+      required:
+        - gatewayTokenSecret
+      properties:
+        gatewayTokenSecret:
+          type: string
+          default: openclaw-gateway-token
+          description: Name of an OpenChoreo SecretReference whose value is the OPENCLAW_GATEWAY_TOKEN.
+        storageSize:
+          type: string
+          default: 10Gi
+          description: Size of the PVC mounted at /home/node/.openclaw.
+        gateway:
+          type: object
+          default: {}
+          properties:
+            bind:
+              type: string
+              default: lan
+              description: OpenClaw gateway bind mode. Use lan for Service and HTTPRoute reachability.
+            port:
+              type: integer
+              default: 18789
+            enableControlUi:
+              type: boolean
+              default: true
+        agent:
+          type: object
+          default: {}
+          properties:
+            id:
+              type: string
+              default: default
+            name:
+              type: string
+              default: Default Agent
+            instructions:
+              type: string
+              default: You are a helpful OpenClaw agent running on OpenChoreo.
+  validations:
+    - message: parameters.gatewayTokenSecret is required.
+      rule: >-
+        ${has(parameters.gatewayTokenSecret) && parameters.gatewayTokenSecret != ''}
+    - message: OpenClaw gateway endpoint port must match parameters.gateway.port.
+      rule: >-
+        ${!has(workload.endpoints) || !has(workload.endpoints.gateway) || workload.endpoints.gateway.port == parameters.gateway.port}
+    - message: OpenClaw gateway endpoint must use HTTP.
+      rule: >-
+        ${has(workload.endpoints) && has(workload.endpoints.gateway) && workload.endpoints.gateway.type == 'HTTP'}
+    - message: Endpoints with 'external' visibility require gateway.ingress.external to be configured on the Environment or DataPlane.
+      rule: >-
+        ${workload.endpoints.exists(name, ep, 'external' in ep.visibility) ? has(gateway.ingress) && has(gateway.ingress.external) : true}
+    - message: Endpoints with 'internal' visibility require gateway.ingress.internal to be configured on the Environment or DataPlane.
+      rule: >-
+        ${workload.endpoints.exists(name, ep, 'internal' in ep.visibility) ? has(gateway.ingress) && has(gateway.ingress.internal) : true}
+  resources:
+    - id: openclaw-config
+      targetPlane: dataplane
+      template:
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: ${metadata.name}-config
+          namespace: ${metadata.namespace}
+          labels: ${metadata.labels}
+        data:
+          openclaw.json: |
+            {
+              "gateway": {
+                "mode": "local",
+                "bind": "${parameters.gateway.bind}",
+                "port": ${parameters.gateway.port},
+                "controlUi": {
+                  "dangerouslyAllowHostHeaderOriginFallback": true
+                }
+              }
+            }
+          AGENTS.md: |
+            # ${parameters.agent.name}
+
+            ${parameters.agent.instructions}
+    - id: openclaw-gateway-token
+      targetPlane: dataplane
+      template:
+        apiVersion: external-secrets.io/v1
+        kind: ExternalSecret
+        metadata:
+          name: ${metadata.name}-gateway-token
+          namespace: ${metadata.namespace}
+          labels: ${metadata.labels}
+        spec:
+          refreshInterval: 15s
+          secretStoreRef:
+            kind: ClusterSecretStore
+            name: ${dataplane.secretStore}
+          target:
+            creationPolicy: Owner
+            name: ${metadata.name}-gateway-token
+          data:
+            - secretKey: OPENCLAW_GATEWAY_TOKEN
+              remoteRef:
+                key: ${parameters.gatewayTokenSecret}
+                property: value
+    - id: openclaw-home-pvc
+      targetPlane: dataplane
+      template:
+        apiVersion: v1
+        kind: PersistentVolumeClaim
+        metadata:
+          name: ${metadata.name}-home
+          namespace: ${metadata.namespace}
+          labels: ${metadata.labels}
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: ${parameters.storageSize}
+    - id: deployment
+      targetPlane: dataplane
+      template:
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: ${metadata.name}
+          namespace: ${metadata.namespace}
+          labels: ${metadata.labels}
+        spec:
+          replicas: ${environmentConfigs.replicas}
+          strategy:
+            type: Recreate
+          selector:
+            matchLabels: ${metadata.podSelectors}
+          template:
+            metadata:
+              labels: ${metadata.podSelectors}
+            spec:
+              automountServiceAccountToken: false
+              securityContext:
+                fsGroup: 1000
+                runAsGroup: 1000
+                runAsUser: 1000
+                seccompProfile:
+                  type: RuntimeDefault
+              initContainers:
+                - name: openclaw-config-init
+                  image: busybox:1.36
+                  command:
+                    - sh
+                    - -c
+                    - |
+                      set -eu
+                      mkdir -p /home/node/.openclaw/config /home/node/.openclaw/workspace
+                      cp /config/openclaw.json /home/node/.openclaw/config/openclaw.json
+                      cp /config/AGENTS.md /home/node/.openclaw/AGENTS.md
+                  securityContext:
+                    allowPrivilegeEscalation: false
+                    capabilities:
+                      drop:
+                        - ALL
+                    readOnlyRootFilesystem: true
+                    runAsNonRoot: true
+                    runAsGroup: 1000
+                    runAsUser: 1000
+                  volumeMounts:
+                    - name: openclaw-home
+                      mountPath: /home/node/.openclaw
+                    - name: openclaw-config
+                      mountPath: /config
+                      readOnly: true
+                    - name: tmp
+                      mountPath: /tmp
+              containers:
+                - name: openclaw
+                  image: ${workload.container.image}
+                  imagePullPolicy: ${environmentConfigs.imagePullPolicy}
+                  command: >-
+                    ${has(workload.container.command) ? workload.container.command : oc_omit()}
+                  args: >-
+                    ${has(workload.container.args) ? workload.container.args : oc_omit()}
+                  ports:
+                    - name: gateway
+                      containerPort: ${parameters.gateway.port}
+                      protocol: TCP
+                  env:
+                    - name: HOME
+                      value: /home/node
+                    - name: NODE_ENV
+                      value: production
+                    - name: OPENCLAW_CONFIG_DIR
+                      value: /home/node/.openclaw/config
+                    - name: OPENCLAW_CONFIG_PATH
+                      value: /home/node/.openclaw/config/openclaw.json
+                    - name: OPENCLAW_GATEWAY_TOKEN
+                      valueFrom:
+                        secretKeyRef:
+                          name: ${metadata.name}-gateway-token
+                          key: OPENCLAW_GATEWAY_TOKEN
+                  envFrom: ${configurations.toContainerEnvFrom()}
+                  resources:
+                    requests:
+                      cpu: ${environmentConfigs.resources.requests.cpu}
+                      memory: ${environmentConfigs.resources.requests.memory}
+                    limits:
+                      cpu: ${environmentConfigs.resources.limits.cpu}
+                      memory: ${environmentConfigs.resources.limits.memory}
+                  securityContext:
+                    allowPrivilegeEscalation: false
+                    capabilities:
+                      drop:
+                        - ALL
+                    readOnlyRootFilesystem: true
+                    runAsNonRoot: true
+                    runAsGroup: 1000
+                    runAsUser: 1000
+                  readinessProbe:
+                    httpGet:
+                      path: /
+                      port: gateway
+                    initialDelaySeconds: 10
+                    periodSeconds: 10
+                    timeoutSeconds: 3
+                    failureThreshold: 6
+                  livenessProbe:
+                    httpGet:
+                      path: /
+                      port: gateway
+                    initialDelaySeconds: 30
+                    periodSeconds: 30
+                    timeoutSeconds: 5
+                    failureThreshold: 3
+                  volumeMounts:
+                    - name: openclaw-home
+                      mountPath: /home/node/.openclaw
+                    - name: tmp
+                      mountPath: /tmp
+                    - name: openclaw-config
+                      mountPath: /config
+                      readOnly: true
+                    - name: config-volume
+                      mountPath: /etc/config
+                      readOnly: true
+              volumes:
+                - name: openclaw-home
+                  persistentVolumeClaim:
+                    claimName: ${metadata.name}-home
+                - name: openclaw-config
+                  configMap:
+                    name: ${metadata.name}-config
+                - name: tmp
+                  emptyDir: {}
+                - name: config-volume
+                  emptyDir: {}
+    - id: service
+      includeWhen: >-
+        ${size(workload.endpoints) > 0}
+      targetPlane: dataplane
+      template:
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: ${metadata.componentName}
+          namespace: ${metadata.namespace}
+          labels: ${metadata.labels}
+        spec:
+          type: ClusterIP
+          selector: ${metadata.podSelectors}
+          ports: ${workload.toServicePorts()}
+    - id: httproute-external
+      forEach: >-
+        ${workload.endpoints.transformMap(name, ep, 'external' in ep.visibility && ep.type in ['HTTP', 'GraphQL', 'Websocket'], ep)}
+      var: endpoint
+      targetPlane: dataplane
+      template:
+        apiVersion: gateway.networking.k8s.io/v1
+        kind: HTTPRoute
+        metadata:
+          name: ${oc_generate_name(metadata.componentName, endpoint.key)}
+          namespace: ${metadata.namespace}
+          labels: >-
+            ${oc_merge(metadata.labels, {'openchoreo.dev/endpoint-name': endpoint.key, 'openchoreo.dev/endpoint-visibility': 'external'})}
+        spec:
+          hostnames: >-
+            ${[gateway.ingress.external.?http, gateway.ingress.external.?https].filter(g, g.hasValue()).map(g, g.value().host).distinct().map(h, oc_dns_label(endpoint.key, metadata.componentName, metadata.environmentName, metadata.componentNamespace) + "." + h)}
+          parentRefs:
+            - name: ${gateway.ingress.external.name}
+              namespace: ${gateway.ingress.external.namespace}
+          rules:
+            - backendRefs:
+                - name: ${metadata.componentName}
+                  port: ${endpoint.value.port}
+    - id: httproute-internal
+      forEach: >-
+        ${workload.endpoints.transformMap(name, ep, 'internal' in ep.visibility && ep.type in ['HTTP', 'GraphQL', 'Websocket'], ep)}
+      var: endpoint
+      targetPlane: dataplane
+      template:
+        apiVersion: gateway.networking.k8s.io/v1
+        kind: HTTPRoute
+        metadata:
+          name: ${oc_generate_name(metadata.componentName, endpoint.key, 'internal')}
+          namespace: ${metadata.namespace}
+          labels: >-
+            ${oc_merge(metadata.labels, {'openchoreo.dev/endpoint-name': endpoint.key, 'openchoreo.dev/endpoint-visibility': 'internal'})}
+        spec:
+          hostnames: >-
+            ${[gateway.ingress.internal.?http, gateway.ingress.internal.?https].filter(g, g.hasValue()).map(g, g.value().host).distinct().map(h, oc_dns_label(endpoint.key, metadata.componentName, metadata.environmentName, metadata.componentNamespace) + "." + h)}
+          parentRefs:
+            - name: ${gateway.ingress.internal.name}
+              namespace: ${gateway.ingress.internal.namespace}
+          rules:
+            - backendRefs:
+                - name: ${metadata.componentName}
+                  port: ${endpoint.value.port}
+    - id: env-config
+      forEach: >-
+        ${configurations.toConfigEnvsByContainer()}
+      var: envConfig
+      targetPlane: dataplane
+      template:
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: ${envConfig.resourceName}
+          namespace: ${metadata.namespace}
+        data: >-
+          ${envConfig.envs.transformMapEntry(index, env, {env.name: env.value})}
+    - id: file-config
+      forEach: >-
+        ${configurations.toConfigFileList()}
+      var: config
+      targetPlane: dataplane
+      template:
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: ${config.resourceName}
+          namespace: ${metadata.namespace}
+        data:
+          ${config.name}: ${config.value}
+    - id: secret-env-external
+      forEach: >-
+        ${configurations.toSecretEnvsByContainer()}
+      var: secretEnv
+      targetPlane: dataplane
+      template:
+        apiVersion: external-secrets.io/v1
+        kind: ExternalSecret
+        metadata:
+          name: ${secretEnv.resourceName}
+          namespace: ${metadata.namespace}
+        spec:
+          refreshInterval: 15s
+          secretStoreRef:
+            kind: ClusterSecretStore
+            name: ${dataplane.secretStore}
+          target:
+            creationPolicy: Owner
+            name: ${secretEnv.resourceName}
+          data: >-
+            ${secretEnv.envs.map(secret, {'secretKey': secret.name, 'remoteRef': {'key': secret.remoteRef.key, ?'property': secret.remoteRef.?property}})}
+    - id: secret-file-external
+      forEach: >-
+        ${configurations.toSecretFileList()}
+      var: file
+      targetPlane: dataplane
+      template:
+        apiVersion: external-secrets.io/v1
+        kind: ExternalSecret
+        metadata:
+          name: ${file.resourceName}
+          namespace: ${metadata.namespace}
+        spec:
+          refreshInterval: 15s
+          secretStoreRef:
+            kind: ClusterSecretStore
+            name: ${dataplane.secretStore}
+          target:
+            creationPolicy: Owner
+            name: ${file.resourceName}
+          data:
+            - secretKey: ${file.name}
+              remoteRef:
+                key: ${file.remoteRef.key}
+                property: >-
+                  ${has(file.remoteRef.property) ? file.remoteRef.property : oc_omit()}

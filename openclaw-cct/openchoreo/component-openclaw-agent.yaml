@@ -1,0 +1,26 @@
+apiVersion: openchoreo.dev/v1alpha1
+kind: Component
+metadata:
+  name: openclaw-agent
+  namespace: default
+  annotations:
+    openchoreo.dev/display-name: OpenClaw Agent
+    openchoreo.dev/description: OpenClaw gateway agent deployed from the upstream container image.
+spec:
+  owner:
+    projectName: openclaw-agents
+  componentType:
+    kind: ClusterComponentType
+    name: deployment/openclaw-agent
+  autoDeploy: true
+  parameters:
+    gatewayTokenSecret: openclaw-gateway-token
+    storageSize: 10Gi
+    gateway:
+      bind: lan
+      port: 18789
+      enableControlUi: true
+    agent:
+      id: default
+      name: OpenClaw Agent
+      instructions: You are a helpful OpenClaw agent running on OpenChoreo.
