@@ -68,11 +68,12 @@ This will create a "openclaw-agents" Project, a custom "openclaw-sandbox-agent" 
 
 > Alternatively, you can use the OpenChoreo CLI to apply these instead of kubectl with `occ apply -f <filename/url>`
 
+
 ```sh
-kubectl create -f project.yaml
-kubectl create -f openclaw-sandbox-cct/component-type.yaml
-kubectl create -f openclaw-sandbox-cct/component.yaml
-kubectl create -f openclaw-sandbox-cct/workload.yaml
+kubectl create -f https://raw.githubusercontent.com/binura-g/openchoreo-openclaw-demo/refs/heads/main/project.yaml
+kubectl create -f https://raw.githubusercontent.com/binura-g/openchoreo-openclaw-demo/refs/heads/main/openclaw-sandbox-cct/component-type.yaml
+kubectl create -f https://raw.githubusercontent.com/binura-g/openchoreo-openclaw-demo/refs/heads/main/openclaw-sandbox-cct/component.yaml
+kubectl create -f https://raw.githubusercontent.com/binura-g/openchoreo-openclaw-demo/refs/heads/main/openclaw-sandbox-cct/workload.yaml
 ```
 
 Or if you have the repository cloned locally:
