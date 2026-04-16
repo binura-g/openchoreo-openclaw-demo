@@ -5,10 +5,10 @@ This is a sample config for running [OpenClaw](https://openclaw.ai/) agents on [
 # Pre-requisites
 
 1. This guide assumes you have OpenChoreo running locally on K3d with the default configuration as outlined in https://openchoreo.dev/docs/getting-started/try-it-out/on-k3d-locally/. 
-  - You do not need to clone this repository to follow along. If you're running a different OpenChoreo setup, you will need to clone and modify the OpenChoreo resources in this repository to match your tooling.
+    - You do not need to clone this repository to follow along. If you're running a different OpenChoreo setup, you will need to clone and modify the OpenChoreo resources in this repository to match your tooling.
 
 2. An API key from https://platform.openai.com. 
-  - OpenClaw supports other model providers, but you'll need to update the OpenChoreo resources in this repository to match the provider's configuration.
+    - OpenClaw supports other model providers, but you'll need to update the OpenChoreo resources in this repository to match the provider's configuration.
 
 ## 1. Install Agent-Sandbox CRDs and controllers on the data plane cluster(s)
 
