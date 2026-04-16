@@ -124,6 +124,6 @@ Once the pairing is approved, you should be able to log into OpenClaw Control UI
 
 ---
 
-> **Note:** There's another directory in this repository called `/openclaw-cct` which provides a custom component type for OpenClaw using default K8s primitives like with a standard deployment and PVC - without the abstractions provided by agent-sandbox. You technically do not need a custom component type (CCT) for this, even the default `deployment/web-app` CCT should suffice.
+> **Note:** There's another directory in this repository called `/openclaw-cct` which provides a custom component type for OpenClaw using default K8s primitives such as a apps/v1 deployment and PVC, without the abstractions provided by agent-sandbox. You technically do not need a custom component type (CCT) for this, even the default `deployment/web-app` CCT should suffice.
 
 **If you enjoyed using OpenChoreo, consider giving the project a star on GitHub: https://github.com/openchoreo/openchoreo**
