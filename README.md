@@ -64,14 +64,23 @@ EOF
 
 ## 2. Apply OpenChoreo Resources
 
-> Alternatively, you can use `occ apply -f <filename>`
+This will create a "openclaw-agents" Project, a custom "openclaw-sandbox-agent" ClusterComponentType and a Component to try it out.
 
-This will create a Project called "openclaw-agents", a custom ClusterComponentType "openclaw-sandbox-agent" and a new Component to try it out.
+> Alternatively, you can use the OpenChoreo CLI to apply these instead of kubectl with `occ apply -f <filename/url>`
 
 ```sh
 kubectl create -f project.yaml
-kubectl create -f openclaw-sandbox-cct/openchoreo/cluster-component-type-openclaw-agent-sandbox.yaml
-kubectl create -f openclaw-sandbox-cct/openchoreo/component-openclaw-agent-sandbox.yaml
+kubectl create -f openclaw-sandbox-cct/component-type.yaml
+kubectl create -f openclaw-sandbox-cct/component.yaml
+kubectl create -f openclaw-sandbox-cct/workload.yaml
+```
+
+Or if you have the repository cloned locally:
+
+```sh
+kubectl create -f project.yaml
+kubectl create -f openclaw-sandbox-cct/component-type.yaml
+kubectl create -f openclaw-sandbox-cct/component.yaml
 kubectl create -f openclaw-sandbox-cct/workload.yaml
 ```
 
@@ -102,13 +111,12 @@ You'll see a table with pairing requests - copy the request ID (this is a UUID) 
 kubectl exec -n "$NS" "$POD" -- node /app/dist/index.js devices approve <requestId>
 ```
 
-## 6. Log into OpenClaw
+## 6. Log into the OpenClaw Control UI
 
-Once the pairing is approved, you can log into OpenClaw Control UI and start using it.
-
+Once the pairing is approved, you should be able to log into OpenClaw Control UI and start clawing away :)
 
 ---
 
 > **Note:** There's another directory in this repository called `/openclaw-cct` which provides a custom component type for OpenClaw using default K8s primitives like with a standard deployment and PVC - without the abstractions provided by agent-sandbox. You technically do not need a custom component type (CCT) for this, even the default `deployment/web-app` CCT should suffice.
 
-**If you enjoyed using OpenChoreo, consider giving the project a star: https://github.com/openchoreo/openchoreo**
+**If you enjoyed using OpenChoreo, consider giving the project a star on GitHub: https://github.com/openchoreo/openchoreo**
