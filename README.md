@@ -117,6 +117,26 @@ kubectl create -f openclaw-sandbox-cct/component.yaml
 kubectl create -f openclaw-sandbox-cct/workload.yaml
 ```
 
+## 3. Allow websockets from the data plane gateway
+
+```sh
+kubectl apply -f - <<EOF
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: HTTPListenerPolicy
+metadata:
+  name: enable-websocket
+  namespace: openchoreo-data-plane
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: gateway-default
+  upgradeConfig:
+    enabledUpgrades:
+      - websocket
+EOF
+```
+
 ## 4. Log in to create a pairing request to OpenClaw
 
 Open the external gateway URL shown on the OpenChoreo Portal (via the Component > Deploy tab > View Endpoint URLs) and log in using the `OPENCLAW_GATEWAY_TOKEN` we created earlier.
