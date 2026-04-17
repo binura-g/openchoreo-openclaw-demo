@@ -4,7 +4,7 @@ This is a sample config for running [OpenClaw](https://openclaw.ai/) agents on [
 
 # Pre-requisites
 
-1. This guide assumes you have OpenChoreo running locally on K3d with the default configuration as outlined in https://openchoreo.dev/docs/getting-started/try-it-out/on-k3d-locally/. 
+1. Install OpenChoreo https://openchoreo.dev/docs/getting-started/try-it-out/on-k3d-locally/. 
     - You do not need to clone this repository to follow along. If you're running a different OpenChoreo setup, you will need to clone and modify the OpenChoreo resources in this repository to match your tooling.
 
 2. An API key from https://platform.openai.com. 
@@ -13,13 +13,39 @@ This is a sample config for running [OpenClaw](https://openclaw.ai/) agents on [
 ## 1. Install Agent-Sandbox CRDs and controllers on the data plane cluster(s)
 
 ```shell
+# Reference: https://agent-sandbox.sigs.k8s.io/docs/overview/#installation
 # https://github.com/kubernetes-sigs/agent-sandbox/releases
 export VERSION="v0.3.10"
 kubectl apply -f https://github.com/kubernetes-sigs/agent-sandbox/releases/download/$VERSION/manifest.yaml
 kubectl apply -f https://github.com/kubernetes-sigs/agent-sandbox/releases/download/$VERSION/extensions.yaml
 ```
 
-Reference: https://agent-sandbox.sigs.k8s.io/docs/overview/#installation
+Give the OpenChoreo cluster-agent access to modify agent-sandbox CRs:
+
+```sh
+kubectl patch clusterrole cluster-agent-dataplane-openchoreo-data-plane \
+  --type='json' \
+  -p='[
+    {
+      "op": "add",
+      "path": "/rules/-",
+      "value": {
+        "apiGroups": ["agents.x-k8s.io"],
+        "resources": ["sandboxes"],
+        "verbs": ["get","list","watch","create","update","patch","delete"]
+      }
+    },
+    {
+      "op": "add",
+      "path": "/rules/-",
+      "value": {
+        "apiGroups": ["agents.x-k8s.io"],
+        "resources": ["sandboxes/status","sandboxes/finalizers"],
+        "verbs": ["get","update","patch"]
+      }
+    }
+  ]'
+```
 
 ## 2. Add the secrets to the secret store (OpenBao) and create the OpenChoreo SecretReferences
 
